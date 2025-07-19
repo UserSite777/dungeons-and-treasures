@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+        <title>Подземелья и сокровища</title>
+        <style>
+            body {
+                margin: 0;
+                font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+                color: #fdfdfd;
+                background: #1a1c23;
+                display: flex;
+                flex-direction: column;
+                min-height: 100vh;
+                overflow-x: hidden;
+            }
+
+            main {
+                max-width: 860px;
+                margin: 1rem auto;
+                padding: 0 1rem 2rem;
+                line-height: 1.6;
+                flex-grow: 1;
+            }
+
+            .choice {
+                display: block;
+                margin: 0.5rem 0;
+                padding: 0.6rem 0.8rem;
+                background: #2e313d;
+                border: 1px solid #474b59;
+                border-radius: 4px;
+                cursor: pointer;
+                transition: background 0.2s;
+                text-decoration: none;
+                color: #fdfdfd;
+            }
+
+            .choice:hover {
+                background: #3d4150;
+            }
+
+            .choice.disabled-choice {
+                background: #22242b;
+                border: 1px solid #333640;
+                color: #777;
+                cursor: not-allowed;
+                opacity: 0.6;
+            }
+
+            em { color: #ffc95c; }
+            strong { color: #6fdc8c; }
+
+            /* Индикатор загрузки */
+            #loadingIndicator {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(0, 0, 0, 0.8);
+                padding: 2rem;
+                border-radius: 8px;
+                text-align: center;
+                z-index: 1000;
+                color: #fdfdfd;
+            }
+
+            .spinner {
+                border: 4px solid #f3f3f3;
+                border-top: 4px solid #3498db;
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                animation: spin 2s linear infinite;
+                margin: 0 auto 1rem;
+            }
+
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+
+            #messageBox {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(0, 0, 0, 0.8);
+                padding: 2rem;
+                border-radius: 8px;
+                text-align: center;
+                z-index: 1000;
+                color: #fdfdfd;
+            }
+
+            #messageBox button {
+                margin-top: 1rem;
+                padding: 0.8rem 1.5rem;
+                background: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 1rem;
+                transition: background 0.2s;
+            }
+
+            #messageBox button:hover {
+                background: #45a049;
+            }
+        </style>
+    </head>
+    <body>
+        <!-- Индикатор загрузки -->
+        <div id="loadingIndicator">
+            <div class="spinner"></div>
+            <p>Загрузка игры...</p>
+        </div>
+
+        <main>
+            <div id="text"></div>
+            <div id="choices"></div>
+        </main>
+
+        <script>
+            // ===== ИНТЕГРАЦИЯ С ANDROID =====
+            let androidInterface = null;
+
+            if (typeof android !== 'undefined') {
+                androidInterface = android;
+            }
+
+            function callAndroid(method, ...args) {
+                try {
+                    if (androidInterface && typeof androidInterface[method] === 'function') {
+                        return androidInterface[method](...args);
+                    }
+                } catch (e) {
+                    console.warn('Android method call failed:', method, e);
+                }
+                return null;
+            }
+
+            // ===== ДАННЫЕ ИГРОКА =====
+            let player = {
+                luck: 3,
+                mind: 3,
+                power: 3,
+                level: 1,
+                hp: 100,
+                cards: 0,
+                inventory: []
+            };
+
+            // Загрузить данные игрока из Android
+            function loadPlayerData() {
+                try {
+                    const savedData = callAndroid('getPlayerStats');
+                    if (savedData) {
+                        const parsed = JSON.parse(savedData);
+                        player = { ...player, ...parsed };
+                    }
+                } catch (e) {
+                    console.warn('Failed to load player data:', e);
+                }
+            }
+
+            // Сохранить данные игрока в Android
+            function savePlayerData() {
+                try {
+                    callAndroid('updatePlayerStats',
+                        player.luck,
+                        player.mind,
+                        player.power,
+                        player.hp,
+                        player.cards,
+                        player.level,
+                        JSON.stringify(player.inventory)
+                    );
+                } catch (e) {
+                    console.warn('Failed to save player data:', e);
+                }
+            }
+
+            // ===== ИГРОВАЯ ЛОГИКА =====
+            const story = {
+                intro: {
+                    text: `<h2>Пролог: Зов древних земель</h2>
+                        <p>Туман рассеивается над руинами, вы стоите у границ <em>Проклятых земель</em>.</p>
+                        <p>Легенды гласят, что где-то здесь скрыт <strong>Грааль</strong>.</p>
+                        <p>Перед вами развилка трёх дорог…</p>`,
+                    choices: [
+                        { txt: "Север: Башня Мудрости (1 Разум)", cost: { mind: 1 }, next: "tower", gain: { mind: 1, cards: 1 } },
+                        { txt: "Восток: Оружейная гора (1 Сила)", cost: { power: 1 }, next: "forge", gain: { power: 1, cards: 1 } },
+                        { txt: "Запад: Лес Случайностей (1 Удача)", cost: { luck: 1 }, next: "forest", gain: { luck: 1, cards: 1 } }
+                    ]
+                },
+
+                tower: {
+                    text: `<h2>Башня Мудрости</h2>
+                        <p>Внутри вы сталкиваетесь с загадкой Сфинкса:</p>
+                        <p><em>«Что становится сильнее, когда ею делятся?»</em></p>`,
+                    choices: [
+                        { txt: "Ответить «Знания»", cost: { mind: 1 }, next: "tower_win", gain: { mind: 2, cards: 2 } },
+                        { txt: "Попытаться обойти", cost: { luck: 1 }, next: "plain", gain: { luck: 1, cards: 1 } }
+                    ]
+                },
+
+                tower_win: {
+                    text: `<p>Правильный ответ! Сфинкс пропускает вас и дарует мудрость.</p>
+                        <p>Получены знания древних магов!</p>`,
+                    choices: [{ txt: "Выйти к равнине", cost: {}, next: "plain" }]
+                },
+
+                forge: {
+                    text: `<h2>Оружейная гора</h2>
+                        <p>Ковка гремит, гиганты выковывают алый клинок.</p>
+                        <p>Вы можете попытаться завладеть оружием...</p>`,
+                    choices: [
+                        { txt: "Забрать меч силой", cost: { power: 1 }, next: "forge_win", gain: { power: 2, cards: 2 } },
+                        { txt: "Попытаться убедить", cost: { mind: 1 }, next: "plain", gain: { mind: 1, cards: 1 } }
+                    ]
+                },
+
+                forge_win: {
+                    text: `<p>Вы успешно овладели мечом! Сила течёт по вашим жилам.</p>
+                        <p>Получен <strong>Стальной меч</strong>!</p>`,
+                    choices: [{ txt: "Спуститься к равнине", cost: {}, next: "plain" }]
+                },
+
+                forest: {
+                    text: `<h2>Лес Случайностей</h2>
+                        <p>Всё здесь хрупко и непредсказуемо.</p>
+                        <p>Вы можете попытать счастья в поисках сокровищ...</p>`,
+                    choices: [
+                        { txt: "Обыскать чащу", cost: { luck: 1 }, next: "forest_win", gain: { luck: 2, hp: 20, cards: 2 } },
+                        { txt: "Идти осторожно", cost: {}, next: "plain", gain: { cards: 1 } }
+                    ]
+                },
+
+                forest_win: {
+                    text: `<p>Удача улыбается вам! Найден тайный клад.</p>
+                        <p>Вы находите <strong>Зелье здоровья</strong> и чувствуете прилив сил!</p>`,
+                    choices: [{ txt: "Выйти к равнине", cost: {}, next: "plain" }]
+                },
+
+                plain: {
+                    text: `<h2>Центральная равнина</h2>
+                        <p>Появляется <strong>Тёмный рыцарь-некромант</strong>.</p>
+                        <p>Финальное испытание перед вами!</p>`,
+                    choices: [
+                        { txt: "Вызвать на поединок (2 Силы)", cost: { power: 2 }, next: "end_power", gain: { level: 1, cards: 5 } },
+                        { txt: "Попытаться переубедить (2 Разума)", cost: { mind: 2 }, next: "end_mind", gain: { level: 1, cards: 5 } },
+                        { txt: "Попытаться обмануть (2 Удачи)", cost: { luck: 2 }, next: "end_luck", gain: { level: 1, cards: 5 } }
+                    ]
+                },
+
+                end_power: {
+                    text: `<h2>Победа силой!</h2>
+                        <p>Грааль в ваших руках. Вы — <strong>Герой силы</strong>!</p>
+                        <p>Поздравляем с победой!</p>`,
+                    choices: [{ txt: "Начать заново", cost: {}, next: "restart" }]
+                },
+
+                end_mind: {
+                    text: `<h2>Победа разума!</h2>
+                        <p>Стражи склоняются перед вашей мудростью.</p>
+                        <p>Вы получаете <strong>Благословение Древних</strong>!</p>`,
+                    choices: [{ txt: "Начать заново", cost: {}, next: "restart" }]
+                },
+
+                end_luck: {
+                    text: `<h2>Победа удачи!</h2>
+                        <p>Временной разлом уносит вас в прошлое.</p>
+                        <p>Грааль спасён! Вы — <strong>Герой судьбы</strong>!</p>`,
+                    choices: [{ txt: "Начать заново", cost: {}, next: "restart" }]
+                },
+
+                restart: {
+                    text: `<h2>Новое приключение</h2>
+                        <p>Хотите начать новое путешествие?</p>`,
+                    choices: [{ txt: "Да, начать заново", cost: {}, next: "intro" }]
+                }
+            };
+
+            function checkCanAfford(cost) {
+                if (!cost) return true;
+                return (
+                    player.luck >= (cost.luck || 0) &&
+                    player.mind >= (cost.mind || 0) &&
+                    player.power >= (cost.power || 0) &&
+                    player.hp >= (cost.hp || 0)
+                );
+            }
+
+            function selectChoice(sceneId, choiceIndex) {
+                const choice = story[sceneId].choices[choiceIndex];
+
+                if (choice.cost) {
+                    player.luck -= (choice.cost.luck || 0);
+                    player.mind -= (choice.cost.mind || 0);
+                    player.power -= (choice.cost.power || 0);
+                    player.hp -= (choice.cost.hp || 0);
+                }
+
+                if (choice.gain) {
+                    player.luck += (choice.gain.luck || 0);
+                    player.mind += (choice.gain.mind || 0);
+                    player.power += (choice.gain.power || 0);
+                    player.hp += (choice.gain.hp || 0);
+                    player.level += (choice.gain.level || 0);
+                    player.cards += (choice.gain.cards || 0);
+                }
+
+                if (player.hp <= 0) {
+                    showMessage("Ваше здоровье на исходе! Игра окончена.");
+                    setTimeout(() => {
+                        resetGame();
+                    }, 2000);
+                    return;
+                }
+
+                if (player.cards >= 20) {
+                    showMessage("Вы собрали достаточно карт для особой победы!");
+                    setTimeout(() => {
+                        render('end_power');
+                    }, 2000);
+                    return;
+                }
+
+                if (choice.next === 'restart') {
+                    resetGame();
+                } else {
+                    render(choice.next);
+                }
+            }
+
+            function render(sceneId) {
+                const scene = story[sceneId];
+                if (!scene) {
+                    console.error("Сцена не найдена:", sceneId);
+                    return;
+                }
+
+                document.getElementById('text').innerHTML = scene.text;
+                const choicesDiv = document.getElementById('choices');
+                choicesDiv.innerHTML = '';
+
+                scene.choices.forEach((choice, index) => {
+                    const button = document.createElement('a');
+                    button.className = 'choice';
+                    button.textContent = choice.txt;
+
+                    const canAfford = checkCanAfford(choice.cost);
+                    if (canAfford) {
+                        button.onclick = () => selectChoice(sceneId, index);
+                    } else {
+                        button.classList.add('disabled-choice');
+                        button.onclick = (e) => {
+                            e.preventDefault();
+                            showMessage("Недостаточно характеристик для этого действия!");
+                        };
+                    }
+
+                    choicesDiv.appendChild(button);
+                });
+
+                savePlayerData();
+            }
+
+            function resetGame() {
+                player = {
+                    luck: 3,
+                    mind: 3,
+                    power: 3,
+                    level: 1,
+                    hp: 100,
+                    cards: 0,
+                    inventory: []
+                };
+                savePlayerData();
+                render('intro');
+            }
+
+            function showMessage(message) {
+                const messageBox = document.createElement('div');
+                messageBox.id = 'messageBox';
+                messageBox.innerHTML = `
+                    <p>${message}</p>
+                    <button onclick="this.parentNode.remove()">ОК</button>
+                `;
+                document.body.appendChild(messageBox);
+            }
+
+            window.addEventListener('load', () => {
+                // Скрываем индикатор загрузки
+                document.getElementById('loadingIndicator').style.display = 'none';
+
+                // Загружаем данные игрока
+                loadPlayerData();
+
+                // Уведомляем Android о готовности
+                callAndroid('onGameReady');
+
+                // Запускаем игру
+                render('intro');
+            });
+
+            // Экспорт функций для Android
+            window.gameInterface = {
+                getCurrentStats: () => JSON.stringify(player),
+                setPlayerStats: (statsJson) => {
+                    try {
+                        const newStats = JSON.parse(statsJson);
+                        player = { ...player, ...newStats };
+                    } catch (e) {
+                        console.error('Error parsing stats:', e);
+                    }
+                },
+                pauseGame: () => savePlayerData(),
+                resumeGame: () => loadPlayerData(),
+                resetGame
+            };
+        </script>
+    </body>
+</html>

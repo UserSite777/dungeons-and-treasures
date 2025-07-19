@@ -1,0 +1,20 @@
+/build
+out/
+app/build/
+proguard/
+captures/
+
+# Gradle
+.gradle/
+build/
+/out/
+/.gradle
+/.idea
+/*.iml
+/*.iws
+/*.ipr
+/local.properties
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -22,28 +22,13 @@ class WebAppInterface(
         hp: Int,
         cards: Int,
         level: Int,
-        inventoryJson: String = "[]"
+        inventoryJson: String
     ) {
         handler.post {
             try {
-                val receivedLuck = luck
-                val receivedMind = mind
-                val receivedPower = power
-                val receivedHp = hp
-                val receivedCards = cards
-                val receivedLevel = level
-
-                val currentStats = gameData.getPlayerStats()
-                val newStats = currentStats.copy(
-                    luck = receivedLuck,
-                    mind = receivedMind,
-                    power = receivedPower,
-                    hp = receivedHp,
-                    cards = receivedCards,
-                    level = receivedLevel,
-                    inventory = parseInventory(inventoryJson)
-                )
-                gameData.savePlayerStats(newStats)
+                val inventory = parseInventory(inventoryJson)
+                val stats = PlayerStats(luck, mind, power, hp, cards, level, inventory)
+                gameData.savePlayerStats(stats)
                 onStatsChanged()
             } catch (e: Exception) {
                 showToast("Ошибка обновления статистики: ${e.message}")
@@ -55,87 +40,96 @@ class WebAppInterface(
     fun getPlayerStats(): String {
         return try {
             val stats = gameData.getPlayerStats()
-            JSONObject().apply {
-                put("luck", stats.luck)
-                put("mind", stats.mind)
-                put("power", stats.power)
-                put("hp", stats.hp)
-                put("cards", stats.cards)
-                put("level", stats.level)
-                put("inventory", stats.inventory.joinToString(","))
-            }.toString()
+            val obj = JSONObject()
+            obj.put("luck", stats.luck)
+            obj.put("mind", stats.mind)
+            obj.put("power", stats.power)
+            obj.put("hp", stats.hp)
+            obj.put("cards", stats.cards)
+            obj.put("level", stats.level)
+            obj.put("inventory", stats.inventory.joinToString(","))
+            obj.put("companion", gameData.getCurrentCompanionName())
+            obj.toString()
         } catch (e: Exception) {
-            "{\"luck\":3,\"mind\":3,\"power\":3,\"hp\":100,\"cards\":0,\"level\":1,\"inventory\":\"\"}"
+            "{\"luck\":3,\"mind\":3,\"power\":3,\"hp\":100,\"cards\":0,\"level\":1,\"inventory\":\"\",\"companion\":\"\"}"
         }
+    }
+
+    @JavascriptInterface
+    fun addToInventory(item: String) {
+        handler.post {
+            gameData.addToInventory(item)
+            onStatsChanged()
+        }
+    }
+
+    @JavascriptInterface
+    fun getCurrentCompanion(): String {
+        return gameData.getCurrentCompanionName()
     }
 
     @JavascriptInterface
     fun saveGameProgress(sceneId: String, playerData: String) {
         handler.post {
-            try {
-                val sharedPrefs = context.getSharedPreferences("game_progress", Context.MODE_PRIVATE)
-                sharedPrefs.edit().apply {
-                    putString("current_scene", sceneId)
-                    putString("player_data", playerData)
-                    apply()
-                }
-            } catch (e: Exception) {
-                showToast("Ошибка сохранения: ${e.message}")
-            }
+            val sharedPrefs = context.getSharedPreferences("game_progress", Context.MODE_PRIVATE)
+            sharedPrefs.edit()
+                .putString("current_scene", sceneId)
+                .putString("player_data", playerData)
+                .apply()
         }
     }
 
     @JavascriptInterface
     fun loadGameProgress(): String {
-        return try {
-            val sharedPrefs = context.getSharedPreferences("game_progress", Context.MODE_PRIVATE)
-            val currentScene = sharedPrefs.getString("current_scene", "intro") ?: "intro"
-            val playerData = sharedPrefs.getString("player_data", "{}") ?: "{}"
-
-            JSONObject().apply {
-                put("scene", currentScene)
-                put("player", playerData)
-            }.toString()
-        } catch (e: Exception) {
-            "{\"scene\":\"intro\",\"player\":\"{}\"}"
-        }
+        val sharedPrefs = context.getSharedPreferences("game_progress", Context.MODE_PRIVATE)
+        val obj = JSONObject()
+        obj.put("scene", sharedPrefs.getString("current_scene", "intro"))
+        obj.put("player", sharedPrefs.getString("player_data", "{}"))
+        return obj.toString()
     }
 
     @JavascriptInterface
     fun resetGame() {
         handler.post {
             gameData.resetGameData()
-            val sharedPrefs = context.getSharedPreferences("game_progress", Context.MODE_PRIVATE)
-            sharedPrefs.edit().clear().apply()
+            val prefs = context.getSharedPreferences("game_progress", Context.MODE_PRIVATE)
+            prefs.edit().clear().apply()
             onStatsChanged()
             showToast("Игра сброшена")
         }
     }
 
     @JavascriptInterface
-    fun showToast(message: String) {
+    fun goBackToMainMenu() {
         handler.post {
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            if (context is GameplayActivity) {
+                context.navigateToMainFromJS()
+            }
         }
     }
 
     @JavascriptInterface
-    fun log(message: String) {
-        handler.post {
-            android.util.Log.d("GameWebView", message)
+    fun syncStatsToJS(): String {
+        val stats = gameData.getPlayerStats()
+        val json = JSONObject().apply {
+            put("luck", stats.luck)
+            put("mind", stats.mind)
+            put("power", stats.power)
+            put("hp", stats.hp)
+            put("cards", stats.cards)
+            put("level", stats.level)
+            put("inventory", stats.inventory.joinToString(","))
+            put("companion", gameData.getCurrentCompanionName())
         }
+        return json.toString()
     }
 
-    // Вспомогательная функция для парсинга инвентаря
-    private fun parseInventory(inventoryJson: String): List<String> {
-        return try {
-            if (inventoryJson.isEmpty() || inventoryJson == "[]") {
-                emptyList()
-            } else {
-                inventoryJson.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-            }
-        } catch (e: Exception) {
-            emptyList()
-        }
+    private fun showToast(message: String) {
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun parseInventory(json: String): List<String> {
+        if (json.trim().isEmpty() || json.trim() == "[]") return emptyList()
+        return json.removePrefix("[").removeSuffix("]").split(",").map { it.trim('"', ' ', ',') }.filter { it.isNotEmpty() }
     }
 }

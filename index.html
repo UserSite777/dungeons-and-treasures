@@ -1,427 +1,371 @@
 <!DOCTYPE html>
 <html lang="ru">
     <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-        <title>Подземелья и сокровища</title>
+        <meta charset="UTF-8">
+        <title>Подземелья и сокровища • Текстовый квест</title>
         <style>
+            .quest-container {
+                text-align: center;
+                margin: 0 auto;
+                max-width: 700px;
+                padding: 0;
+            }
+            .quest-container img {
+                max-width: 80%;
+                border-radius: 8px;
+                transform: scale(0.55);
+                transform-origin: center center;
+                display: block;
+                margin: 0 auto;
+                margin-bottom: 0.5em;
+                cursor: pointer;
+                transition: transform 0.2s ease;
+            }
+            .quest-container img:hover {
+                transform: scale(0.6);
+            }
+            #text {
+                padding: 0.5em 1em;
+                font-size: 1.1em;
+                min-height: 8em;
+            }
+            #choices button {
+                display: block;
+                margin: 0.5em 0;
+                font-size: 1.1em;
+                width: 100%;
+            }
             body {
+                background: #29291a;
+                color: #ffe;
+                font-family: "PT Sans", Arial, sans-serif;
                 margin: 0;
-                font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
-                color: #fdfdfd;
-                background: #1a1c23;
+                padding: 0;
                 display: flex;
                 flex-direction: column;
                 min-height: 100vh;
-                overflow-x: hidden;
             }
-
+            header, footer {
+                padding: 1em;
+                background: rgba(0, 0, 0, 0.3);
+            }
             main {
-                max-width: 860px;
-                margin: 1rem auto;
-                padding: 0 1rem 2rem;
-                line-height: 1.6;
-                flex-grow: 1;
+                flex: 1;
+                padding: 1em;
+                overflow-y: auto;
             }
-
-            .choice {
-                display: block;
-                margin: 0.5rem 0;
-                padding: 0.6rem 0.8rem;
-                background: #2e313d;
-                border: 1px solid #474b59;
-                border-radius: 4px;
-                cursor: pointer;
-                transition: background 0.2s;
-                text-decoration: none;
-                color: #fdfdfd;
+            .stat {
+                display: inline-block;
+                margin-right: 1.3em;
+                font-size: 1.08em;
             }
-
-            .choice:hover {
-                background: #3d4150;
-            }
-
-            .choice.disabled-choice {
-                background: #22242b;
-                border: 1px solid #333640;
-                color: #777;
-                cursor: not-allowed;
-                opacity: 0.6;
-            }
-
-            em { color: #ffc95c; }
-            strong { color: #6fdc8c; }
-
-            /* Индикатор загрузки */
-            #loadingIndicator {
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                background: rgba(0, 0, 0, 0.8);
-                padding: 2rem;
-                border-radius: 8px;
-                text-align: center;
-                z-index: 1000;
-                color: #fdfdfd;
-            }
-
-            .spinner {
-                border: 4px solid #f3f3f3;
-                border-top: 4px solid #3498db;
-                border-radius: 50%;
-                width: 40px;
-                height: 40px;
-                animation: spin 2s linear infinite;
-                margin: 0 auto 1rem;
-            }
-
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-
-            #messageBox {
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                background: rgba(0, 0, 0, 0.8);
-                padding: 2rem;
-                border-radius: 8px;
-                text-align: center;
-                z-index: 1000;
-                color: #fdfdfd;
-            }
-
-            #messageBox button {
-                margin-top: 1rem;
-                padding: 0.8rem 1.5rem;
-                background: #4CAF50;
-                color: white;
+            button {
+                background: #554;
+                color: #fc0;
                 border: none;
-                border-radius: 4px;
+                padding: 0.7em 1.5em;
+                border-radius: 0.6em;
                 cursor: pointer;
-                font-size: 1rem;
-                transition: background 0.2s;
+                font-size: 1em;
+                width: 100%;
             }
-
-            #messageBox button:hover {
-                background: #45a049;
+            button:active {
+                background: #886;
+            }
+            @media (max-width: 700px) {
+                #text, header, footer {
+                    font-size: 1em;
+                }
             }
         </style>
     </head>
     <body>
-        <!-- Индикатор загрузки -->
-        <div id="loadingIndicator">
-            <div class="spinner"></div>
-            <p>Загрузка игры...</p>
-        </div>
-
+        <header>
+            <div class="stat" id="levelStat">Уровень: <span>1</span></div>
+        </header>
         <main>
             <div id="text"></div>
             <div id="choices"></div>
         </main>
+        <footer>
+            <button onclick="goBackToMainMenu()">Назад в меню</button>
+        </footer>
 
         <script>
-            // ===== ИНТЕГРАЦИЯ С ANDROID =====
-            let androidInterface = null;
-
-            if (typeof android !== 'undefined') {
-                androidInterface = android;
+            function goToNextScene(sceneId) {
+                render(sceneId);
             }
 
-            function callAndroid(method, ...args) {
-                try {
-                    if (androidInterface && typeof androidInterface[method] === 'function') {
-                        return androidInterface[method](...args);
-                    }
-                } catch (e) {
-                    console.warn('Android method call failed:', method, e);
-                }
-                return null;
-            }
-
-            // ===== ДАННЫЕ ИГРОКА =====
             let player = {
-                luck: 3,
-                mind: 3,
-                power: 3,
-                level: 1,
-                hp: 100,
-                cards: 0,
-                inventory: []
+                luck: 3, mind: 3, power: 3, hp: 100, cards: 0, level: 1, inventory: []
             };
+            let companion = ""; // "MAGE", "ARCHER", "WARRIOR" или ""
 
-            // Загрузить данные игрока из Android
-            function loadPlayerData() {
-                try {
-                    const savedData = callAndroid('getPlayerStats');
-                    if (savedData) {
-                        const parsed = JSON.parse(savedData);
-                        player = { ...player, ...parsed };
-                    }
-                } catch (e) {
-                    console.warn('Failed to load player data:', e);
+            function syncFromAndroidStats() {
+                if (window.android && android.getPlayerStats) {
+                    try {
+                        const st = JSON.parse(android.getPlayerStats());
+                        player.luck = st.luck;
+                        player.mind = st.mind;
+                        player.power = st.power;
+                        player.hp = st.hp;
+                        player.cards = st.cards;
+                        player.level = st.level;
+                        player.inventory = st.inventory ? st.inventory.split(",").filter(x => x) : [];
+                        companion = (st.companion || "").toUpperCase();
+                    } catch (e) { }
                 }
             }
 
-            // Сохранить данные игрока в Android
-            function savePlayerData() {
-                try {
-                    callAndroid('updatePlayerStats',
-                        player.luck,
-                        player.mind,
-                        player.power,
-                        player.hp,
-                        player.cards,
-                        player.level,
-                        JSON.stringify(player.inventory)
-                    );
-                } catch (e) {
-                    console.warn('Failed to save player data:', e);
-                }
-            }
+            syncFromAndroidStats();
 
-            // ===== ИГРОВАЯ ЛОГИКА =====
             const story = {
                 intro: {
-                    text: `<h2>Пролог: Зов древних земель</h2>
-                        <p>Туман рассеивается над руинами, вы стоите у границ <em>Проклятых земель</em>.</p>
-                        <p>Легенды гласят, что где-то здесь скрыт <strong>Грааль</strong>.</p>
-                        <p>Перед вами развилка трёх дорог…</p>`,
+                    text: `<h2>Врата подземелий</h2><p>Ваша команда готова. Впереди опасности, загадки и битвы.</p>`,
                     choices: [
-                        { txt: "Север: Башня Мудрости (1 Разум)", cost: { mind: 1 }, next: "tower", gain: { mind: 1, cards: 1 } },
-                        { txt: "Восток: Оружейная гора (1 Сила)", cost: { power: 1 }, next: "forge", gain: { power: 1, cards: 1 } },
-                        { txt: "Запад: Лес Случайностей (1 Удача)", cost: { luck: 1 }, next: "forest", gain: { luck: 1, cards: 1 } }
+                        { txt: "Отправиться к башне мага", next: "tower" },
+                        { txt: "Пойти к лесу эльфов", next: "forest" },
+                        { txt: "Пойти на равнину", next: "plain" }
                     ]
                 },
-
                 tower: {
-                    text: `<h2>Башня Мудрости</h2>
-                        <p>Внутри вы сталкиваетесь с загадкой Сфинкса:</p>
-                        <p><em>«Что становится сильнее, когда ею делятся?»</em></p>`,
+                    text: "<p>Старая башня мага. На двери — загадка:</p><blockquote>Что дороже всего для гения?</blockquote>",
                     choices: [
-                        { txt: "Ответить «Знания»", cost: { mind: 1 }, next: "tower_win", gain: { mind: 2, cards: 2 } },
-                        { txt: "Попытаться обойти", cost: { luck: 1 }, next: "plain", gain: { luck: 1, cards: 1 } }
+                        { txt: "Знания", next: "tower_win", gain: { item: "Зелье здоровья" } },
+                        { txt: "Власть", next: "combat_start" },
+                        { txt: "Слава", next: "combat_start" }
                     ]
                 },
-
                 tower_win: {
-                    text: `<p>Правильный ответ! Сфинкс пропускает вас и дарует мудрость.</p>
-                        <p>Получены знания древних магов!</p>`,
-                    choices: [{ txt: "Выйти к равнине", cost: {}, next: "plain" }]
-                },
-
-                forge: {
-                    text: `<h2>Оружейная гора</h2>
-                        <p>Ковка гремит, гиганты выковывают алый клинок.</p>
-                        <p>Вы можете попытаться завладеть оружием...</p>`,
+                    text: "<p>Правильный ответ! Башня дарует <b>зелье здоровья</b>.</p>",
                     choices: [
-                        { txt: "Забрать меч силой", cost: { power: 1 }, next: "forge_win", gain: { power: 2, cards: 2 } },
-                        { txt: "Попытаться убедить", cost: { mind: 1 }, next: "plain", gain: { mind: 1, cards: 1 } }
+                        { txt: "К равнине", next: "plain", gain: { item: "Зелье здоровья" } }
                     ]
                 },
-
-                forge_win: {
-                    text: `<p>Вы успешно овладели мечом! Сила течёт по вашим жилам.</p>
-                        <p>Получен <strong>Стальной меч</strong>!</p>`,
-                    choices: [{ txt: "Спуститься к равнине", cost: {}, next: "plain" }]
-                },
-
                 forest: {
-                    text: `<h2>Лес Случайностей</h2>
-                        <p>Всё здесь хрупко и непредсказуемо.</p>
-                        <p>Вы можете попытать счастья в поисках сокровищ...</p>`,
+                    text: "<p>Лес мрачен. На развилке стоит фея:</p>",
                     choices: [
-                        { txt: "Обыскать чащу", cost: { luck: 1 }, next: "forest_win", gain: { luck: 2, hp: 20, cards: 2 } },
-                        { txt: "Идти осторожно", cost: {}, next: "plain", gain: { cards: 1 } }
+                        { txt: "Попросить подсказку", next: "forest_tip", cost: { cards: 1 } },
+                        { txt: "Идти без подсказки", next: "plain" }
                     ]
                 },
-
-                forest_win: {
-                    text: `<p>Удача улыбается вам! Найден тайный клад.</p>
-                        <p>Вы находите <strong>Зелье здоровья</strong> и чувствуете прилив сил!</p>`,
-                    choices: [{ txt: "Выйти к равнине", cost: {}, next: "plain" }]
+                forest_tip: {
+                    text: "<p>Фея даёт зелье здоровья за карту.</p>",
+                    choices: [
+                        { txt: "Вперёд", next: "plain", gain: { item: "Зелье здоровья" } }
+                    ]
                 },
-
                 plain: {
-                    text: `<h2>Центральная равнина</h2>
-                        <p>Появляется <strong>Тёмный рыцарь-некромант</strong>.</p>
-                        <p>Финальное испытание перед вами!</p>`,
+                    text: `<h2>Центральная равнина</h2><p>Появляется <strong>Тёмный рыцарь-некромант</strong>.</p>`,
                     choices: [
-                        { txt: "Вызвать на поединок (2 Силы)", cost: { power: 2 }, next: "end_power", gain: { level: 1, cards: 5 } },
-                        { txt: "Попытаться переубедить (2 Разума)", cost: { mind: 2 }, next: "end_mind", gain: { level: 1, cards: 5 } },
-                        { txt: "Попытаться обмануть (2 Удачи)", cost: { luck: 2 }, next: "end_luck", gain: { level: 1, cards: 5 } }
+                        { txt: "В бой (2 Силы)", cost: { power: 2, hp: 10 }, next: "duel", gain: { power: 2, level: 1, cards: 2 } },
+                        { txt: "Убедить (2 Разума)", cost: { mind: 2 }, next: "parley", gain: { mind: 2, level: 1, cards: 2 } },
+                        { txt: "Сбежать (2 Удачи)", cost: { luck: 2 }, next: "trick", gain: { luck: 2, level: 1, cards: 2 } },
+                        { txt: "Особый квест спутника (-5 HP)", cost: { hp: 5 }, next: "companion_dispatch" }
                     ]
                 },
-
-                end_power: {
-                    text: `<h2>Победа силой!</h2>
-                        <p>Грааль в ваших руках. Вы — <strong>Герой силы</strong>!</p>
-                        <p>Поздравляем с победой!</p>`,
-                    choices: [{ txt: "Начать заново", cost: {}, next: "restart" }]
+                companion_dispatch: {
+                    text: "",
+                    choices: []
                 },
-
-                end_mind: {
-                    text: `<h2>Победа разума!</h2>
-                        <p>Стражи склоняются перед вашей мудростью.</p>
-                        <p>Вы получаете <strong>Благословение Древних</strong>!</p>`,
-                    choices: [{ txt: "Начать заново", cost: {}, next: "restart" }]
+                quest_mage_start: {
+                    text: `
+                        <div class="quest-container">
+                            <img src="file:///android_res/drawable/qvest1.png" alt="Mage Quest" onclick="goToNextScene('quest_mage_room')">
+                            <h2>Тайная библиотека Архимага</h2>
+                            <p>Маг открывает портал… Вы теряете <b>15 здоровья</b>.</p>
+                        </div>
+                    `,
+                    choices: [{ txt: "Войти (-15 HP)", cost: { hp: 15 }, next: "quest_mage_room" }]
                 },
-
-                end_luck: {
-                    text: `<h2>Победа удачи!</h2>
-                        <p>Временной разлом уносит вас в прошлое.</p>
-                        <p>Грааль спасён! Вы — <strong>Герой судьбы</strong>!</p>`,
-                    choices: [{ txt: "Начать заново", cost: {}, next: "restart" }]
+                quest_mage_room: {
+                    text: `<p>Вы оказались в тайной библиотеке. В центре — древний свиток.</p><p>Маг говорит:</p><blockquote>"Выбери: либо рискни и получишь большую награду, либо уйди и сохранись."</blockquote>`,
+                    choices: [
+                        { txt: "Рискнуть", next: "quest_mage_risk" },
+                        { txt: "Уйти", next: "grail" }
+                    ]
                 },
-
-                restart: {
-                    text: `<h2>Новое приключение</h2>
-                        <p>Хотите начать новое путешествие?</p>`,
-                    choices: [{ txt: "Да, начать заново", cost: {}, next: "intro" }]
+                quest_mage_risk: {
+                    text: `<p>Вы рискнули...</p>`,
+                    choices: [{ txt: "Продолжить", next: "grail" }]
+                },
+                quest_archer_start: {
+                    text: `
+                        <div class="quest-container">
+                            <img src="file:///android_res/drawable/qvest2.png" alt="Archer Quest" onclick="goToNextScene('quest_archer_result')">
+                            <h2>Священная роща Стрельбы</h2>
+                            <p>Попади тремя стрелами — иначе -10 HP.</p>
+                        </div>
+                    `,
+                    choices: [{ txt: "Стрелять", next: "quest_archer_result" }]
+                },
+                quest_archer_result: {
+                    text: `<p>Стрельба окончена.</p>`,
+                    choices: [{ txt: "Продолжить", next: "grail" }]
+                },
+                quest_warrior_start: {
+                    text: `
+                        <div class="quest-container">
+                            <img src="file:///android_res/drawable/qvest3.png" alt="Warrior Quest" onclick="goToNextScene('quest_warrior_round')">
+                            <h2>Арена Героев</h2>
+                            <p>Бой с големом (HP 40)</p>
+                        </div>
+                    `,
+                    choices: [{ txt: "В бой!", next: "quest_warrior_round" }]
+                },
+                quest_warrior_round: {
+                    text: `<p>Битва продолжается.</p>`,
+                    choices: [{ txt: "Бить дальше", next: "quest_warrior_round" }]
+                },
+                duel: {
+                    text: "<p>Бой с рыцарем! -10 HP</p>",
+                    choices: [{ txt: "Победа", next: "grail", gain: { hp: 10 } }]
+                },
+                parley: {
+                    text: "<p>Вы убеждаете рыцаря уйти.</p>",
+                    choices: [{ txt: "Дальше", next: "grail" }]
+                },
+                trick: {
+                    text: "<p>Вам удалось сбежать.</p>",
+                    choices: [{ txt: "Дальше", next: "grail" }]
+                },
+                grail: {
+                    text: "<h2>Победа!</h2><p>Но приключения продолжаются…</p>",
+                    choices: []
                 }
             };
 
-            function checkCanAfford(cost) {
-                if (!cost) return true;
-                return (
-                    player.luck >= (cost.luck || 0) &&
-                    player.mind >= (cost.mind || 0) &&
-                    player.power >= (cost.power || 0) &&
-                    player.hp >= (cost.hp || 0)
+            function updateStats(oldState) {
+                ["level"].forEach(
+                    s => document.getElementById(s + "Stat").querySelector("span").textContent = player[s]
                 );
+                if (window.android && android.updatePlayerStats) {
+                    android.updatePlayerStats(
+                        player.luck, player.mind, player.power,
+                        player.hp, player.cards, player.level,
+                        JSON.stringify(player.inventory)
+                    );
+                }
             }
 
-            function selectChoice(sceneId, choiceIndex) {
-                const choice = story[sceneId].choices[choiceIndex];
+            function displayMessage(msg, cls) {
+                document.getElementById("text").innerHTML = msg;
+                document.getElementById("choices").innerHTML = "";
+            }
 
-                if (choice.cost) {
-                    player.luck -= (choice.cost.luck || 0);
-                    player.mind -= (choice.cost.mind || 0);
-                    player.power -= (choice.cost.power || 0);
-                    player.hp -= (choice.cost.hp || 0);
+            function selectChoice(sceneId, choiceIdx) {
+                const c = story[sceneId].choices[choiceIdx];
+                const old = { ...player };
+                if (c.cost) {
+                    for (let k in c.cost)
+                        if (k in player) { player[k] = Math.max(0, player[k] - (c.cost[k] || 0)); }
                 }
-
-                if (choice.gain) {
-                    player.luck += (choice.gain.luck || 0);
-                    player.mind += (choice.gain.mind || 0);
-                    player.power += (choice.gain.power || 0);
-                    player.hp += (choice.gain.hp || 0);
-                    player.level += (choice.gain.level || 0);
-                    player.cards += (choice.gain.cards || 0);
-                }
-
-                if (player.hp <= 0) {
-                    showMessage("Ваше здоровье на исходе! Игра окончена.");
-                    setTimeout(() => {
-                        resetGame();
-                    }, 2000);
+                if (c.next === "companion_dispatch") {
+                    startCompanionQuest();
+                    updateStats(old);
                     return;
                 }
-
-                if (player.cards >= 20) {
-                    showMessage("Вы собрали достаточно карт для особой победы!");
-                    setTimeout(() => {
-                        render('end_power');
-                    }, 2000);
-                    return;
+                if (c.gain) {
+                    for (let k in c.gain) {
+                        if (k === "item") {
+                            player.inventory.push(c.gain[k]);
+                        } else if (k in player) {
+                            player[k] += c.gain[k];
+                        }
+                    }
                 }
-
-                if (choice.next === 'restart') {
-                    resetGame();
-                } else {
-                    render(choice.next);
-                }
+                render(c.next);
+                updateStats(old);
             }
 
             function render(sceneId) {
-                const scene = story[sceneId];
-                if (!scene) {
-                    console.error("Сцена не найдена:", sceneId);
-                    return;
+                if (sceneId === "companion_dispatch") { startCompanionQuest(); return; }
+                if (sceneId === "quest_archer_result") resolveArcherQuest();
+                if (sceneId === "quest_warrior_round") resolveWarriorRound();
+                if (sceneId === "quest_mage_risk") resolveMageRisk();
+                const s = story[sceneId];
+                document.getElementById("text").innerHTML = s.text;
+                let chs = s.choices.map((c, i) => {
+                    let title = c.txt;
+                    if (c.cost) {
+                        const cc = Object.entries(c.cost).map(([k, v]) =>
+                            `${k == "hp" ? "HP" : k == "luck" ? "Удача" : k == "mind" ? "Разум" : k == "power" ? "Сила" : k}:${v}`
+                        ).join(", ");
+                        if (cc) title += ` [${cc}]`;
+                    }
+                    return `<button onclick="selectChoice('${sceneId}',${i})">${title}</button>`;
+                }).join("");
+                document.getElementById("choices").innerHTML = chs;
+                updateStats(player);
+            }
+
+            function startCompanionQuest() {
+                const map = { MAGE: "quest_mage_start", ARCHER: "quest_archer_start", WARRIOR: "quest_warrior_start" };
+                render(map[companion] || "plain");
+            }
+
+            function resolveArcherQuest() {
+                const hit = Math.random() * 100 < player.luck * 10;
+                if (hit) {
+                    player.cards += 3; player.hp += 20; player.inventory.push("Зелье здоровья");
+                    story.quest_archer_result.text = "<p>Три точных выстрела! +20 HP, +3 карты и зелье здоровья.</p>";
+                } else {
+                    player.hp -= 10;
+                    story.quest_archer_result.text = "<p>Промах! -10 HP.</p>";
+                    if (player.hp <= 0) { gameOver(); return; }
                 }
+                story.quest_archer_result.choices = [{ txt: "Дальше", next: "grail" }];
+            }
 
-                document.getElementById('text').innerHTML = scene.text;
-                const choicesDiv = document.getElementById('choices');
-                choicesDiv.innerHTML = '';
+            let arenaEnemyHp = 40;
+            function resolveWarriorRound() {
+                const pDMG = player.power + Math.floor(Math.random() * 6);
+                const eDMG = 8 + Math.floor(Math.random() * 4);
+                arenaEnemyHp -= pDMG; player.hp -= eDMG;
+                if (arenaEnemyHp <= 0) {
+                    player.cards += 4; player.hp += 30; player.inventory.push("Зелье здоровья");
+                    story.quest_warrior_round.text = `<p>Победа! +30 HP, +4 карты и зелье здоровья.</p>`;
+                    story.quest_warrior_round.choices = [{ txt: "Покинуть арену", next: "grail" }];
+                } else if (player.hp <= 0) {
+                    gameOver();
+                    return;
+                } else {
+                    story.quest_warrior_round.text = `<p>Вы нанесли ${pDMG}, получили ${eDMG}.<br>Голем HP: ${arenaEnemyHp}</p>`;
+                    story.quest_warrior_round.choices = [{ txt: "Бить дальше", next: "quest_warrior_round" }];
+                }
+            }
 
-                scene.choices.forEach((choice, index) => {
-                    const button = document.createElement('a');
-                    button.className = 'choice';
-                    button.textContent = choice.txt;
-
-                    const canAfford = checkCanAfford(choice.cost);
-                    if (canAfford) {
-                        button.onclick = () => selectChoice(sceneId, index);
-                    } else {
-                        button.classList.add('disabled-choice');
-                        button.onclick = (e) => {
-                            e.preventDefault();
-                            showMessage("Недостаточно характеристик для этого действия!");
-                        };
+            function resolveMageRisk() {
+                const success = Math.random() < 0.6; // 60% шанс на успех
+                if (success) {
+                    player.cards += 3;
+                    player.hp += 25;
+                    player.inventory.push("Зелье здоровья");
+                    story.quest_mage_risk.text = `<p>Вы нашли древний артефакт! +25 HP, +3 карты и зелье здоровья.</p>`;
+                } else {
+                    player.hp -= 10;
+                    story.quest_mage_risk.text = `<p>Вы попали в ловушку! -10 HP.</p>`;
+                    if (player.hp <= 0) {
+                        gameOver();
+                        return;
                     }
-
-                    choicesDiv.appendChild(button);
-                });
-
-                savePlayerData();
+                }
+                story.quest_mage_risk.choices = [{ txt: "Дальше", next: "grail" }];
             }
 
-            function resetGame() {
-                player = {
-                    luck: 3,
-                    mind: 3,
-                    power: 3,
-                    level: 1,
-                    hp: 100,
-                    cards: 0,
-                    inventory: []
-                };
-                savePlayerData();
-                render('intro');
+            function gameOver() {
+                displayMessage("<h2>Вы пали...</h2><p>Конец игры.</p>");
             }
 
-            function showMessage(message) {
-                const messageBox = document.createElement('div');
-                messageBox.id = 'messageBox';
-                messageBox.innerHTML = `
-                    <p>${message}</p>
-                    <button onclick="this.parentNode.remove()">ОК</button>
-                `;
-                document.body.appendChild(messageBox);
+            function goBackToMainMenu() {
+                if (window.android && android.goBackToMainMenu) {
+                    android.goBackToMainMenu();
+                } else {
+                    displayMessage("main menu");
+                }
             }
 
-            window.addEventListener('load', () => {
-                // Скрываем индикатор загрузки
-                document.getElementById('loadingIndicator').style.display = 'none';
-
-                // Загружаем данные игрока
-                loadPlayerData();
-
-                // Уведомляем Android о готовности
-                callAndroid('onGameReady');
-
-                // Запускаем игру
-                render('intro');
-            });
-
-            // Экспорт функций для Android
-            window.gameInterface = {
-                getCurrentStats: () => JSON.stringify(player),
-                setPlayerStats: (statsJson) => {
-                    try {
-                        const newStats = JSON.parse(statsJson);
-                        player = { ...player, ...newStats };
-                    } catch (e) {
-                        console.error('Error parsing stats:', e);
-                    }
-                },
-                pauseGame: () => savePlayerData(),
-                resumeGame: () => loadPlayerData(),
-                resetGame
-            };
+            render("intro");
         </script>
     </body>
 </html>

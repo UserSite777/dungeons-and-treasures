@@ -2,7 +2,7 @@ package com.example.game
 
 import android.content.Context
 import android.content.SharedPreferences
-
+import java.time.Instant
 data class PlayerStats(
     val luck: Int = 3,
     val mind: Int = 3,
@@ -14,8 +14,7 @@ data class PlayerStats(
 )
 
 class GameData(context: Context) {
-    private val sharedPreferences: SharedPreferences =
-        context.getSharedPreferences("game_data", Context.MODE_PRIVATE)
+    val sharedPreferences: SharedPreferences = context.getSharedPreferences("game_data", Context.MODE_PRIVATE)
 
     fun getPlayerStats(): PlayerStats {
         return PlayerStats(
@@ -25,51 +24,67 @@ class GameData(context: Context) {
             hp = sharedPreferences.getInt("hp", 100),
             cards = sharedPreferences.getInt("cards", 0),
             level = sharedPreferences.getInt("level", 1),
-            inventory = sharedPreferences.getStringSet("inventory", emptySet())?.toList() ?: emptyList()
+            inventory = sharedPreferences.getStringSet("inventory", null)?.toList() ?: emptyList()
         )
     }
 
     fun savePlayerStats(stats: PlayerStats) {
+        sharedPreferences.edit()
+            .putInt("luck", stats.luck)
+            .putInt("mind", stats.mind)
+            .putInt("power", stats.power)
+            .putInt("hp", stats.hp)
+            .putInt("cards", stats.cards)
+            .putInt("level", stats.level)
+            .putStringSet("inventory", stats.inventory.toSet())
+            .apply()
+    }
+
+    // Добавить зелье или другой предмет
+    fun addToInventory(item: String) {
+        val inv = getPlayerStats().inventory.toMutableList()
+        inv.add(item)
+        sharedPreferences.edit().putStringSet("inventory", inv.toSet()).apply()
+    }
+
+    fun setInventory(list: List<String>) {
+        sharedPreferences.edit().putStringSet("inventory", list.toSet()).apply()
+    }
+
+    // Получить имя выбранного спутника
+    fun getCurrentCompanionName(): String =
+        sharedPreferences.getString("selected_character", "") ?: ""
+
+    fun getSelectedCharacter(): CharacterSheetActivity.CompanionCharacter? {
+        val name = sharedPreferences.getString("selected_character", null)
+        return try {
+            CharacterSheetActivity.CompanionCharacter.valueOf(name ?: "")
+        } catch (e: IllegalArgumentException) {
+            null
+        }
+    }
+
+    fun setSelectedCharacter(character: CharacterSheetActivity.CompanionCharacter?) {
         sharedPreferences.edit().apply {
-            putInt("luck", stats.luck)
-            putInt("mind", stats.mind)
-            putInt("power", stats.power)
-            putInt("hp", stats.hp)
-            putInt("cards", stats.cards)
-            putInt("level", stats.level)
-            putStringSet("inventory", stats.inventory.toSet())
+            putString("selected_character", character?.name)
             apply()
         }
     }
 
+    fun setCooldownUntil(time: Instant) {
+        sharedPreferences.edit().apply {
+            putLong("cooldown_until", time.toEpochMilli())
+            apply()
+        }
+    }
+
+    fun getCooldownUntil(): Instant {
+        val epochMillis = sharedPreferences.getLong("cooldown_until", 0)
+        return if (epochMillis > 0) Instant.ofEpochMilli(epochMillis) else Instant.now().minusSeconds(600)
+    }
+
+    // Сброс всех данных
     fun resetGameData() {
         sharedPreferences.edit().clear().apply()
-    }
-
-    fun updateStat(statName: String, value: Int) {
-        sharedPreferences.edit().apply {
-            putInt(statName, value)
-            apply()
-        }
-    }
-
-    fun getStat(statName: String, defaultValue: Int = 0): Int {
-        return sharedPreferences.getInt(statName, defaultValue)
-    }
-
-    fun addToInventory(item: String) {
-        val currentStats = getPlayerStats()
-        val newInventory = currentStats.inventory.toMutableList()
-        if (!newInventory.contains(item)) {
-            newInventory.add(item)
-            savePlayerStats(currentStats.copy(inventory = newInventory))
-        }
-    }
-
-    fun removeFromInventory(item: String) {
-        val currentStats = getPlayerStats()
-        val newInventory = currentStats.inventory.toMutableList()
-        newInventory.remove(item)
-        savePlayerStats(currentStats.copy(inventory = newInventory))
     }
 }

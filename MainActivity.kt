@@ -1,5 +1,4 @@
 package com.example.game
-
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -21,8 +20,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 class MainActivity : ComponentActivity() {
+    private lateinit var gameData: GameData
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        gameData = GameData(this)
+
         setContent {
             MaterialTheme {
                 MainMenuScreen()
@@ -33,6 +36,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun MainMenuScreen() {
         var showTermsDialog by remember { mutableStateOf(false) }
+        var showResetDialog by remember { mutableStateOf(false) }
 
         Surface(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.fillMaxSize()) {
@@ -87,6 +91,15 @@ class MainActivity : ComponentActivity() {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    // Кнопка "Сбросить прогресс"
+                    GameButton(
+                        text = "Сбросить прогресс",
+                        color = Color(0xFFFF9800),
+                        onClick = { showResetDialog = true }
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     // Кнопка "Выход"
                     GameButton(
                         text = "Выход",
@@ -105,6 +118,17 @@ class MainActivity : ComponentActivity() {
                     navigateToGameplay()
                 },
                 onDismiss = { showTermsDialog = false }
+            )
+        }
+
+        // Диалог сброса прогресса
+        if (showResetDialog) {
+            ResetProgressDialog(
+                onConfirm = {
+                    resetGameProgress()
+                    showResetDialog = false
+                },
+                onDismiss = { showResetDialog = false }
             )
         }
     }
@@ -156,12 +180,61 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    @Composable
+    fun ResetProgressDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Сброс прогресса") },
+            text = {
+                Text(
+                    "Вы уверены, что хотите сбросить весь прогресс? " +
+                            "Это действие удалит все сохранения, статистику персонажа, " +
+                            "выбранных спутников и прогресс в игре. " +
+                            "Отменить это действие будет невозможно!"
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = onConfirm,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFF44336),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text("Да, сбросить")
+                }
+            },
+            dismissButton = {
+                Button(onClick = onDismiss) {
+                    Text("Отмена")
+                }
+            }
+        )
+    }
+
     private fun navigateToGameplay() {
         startActivity(Intent(this, GameplayActivity::class.java))
     }
 
     private fun navigateToCharacterSheet() {
         startActivity(Intent(this, CharacterSheetActivity::class.java))
+    }
+
+    private fun resetGameProgress() {
+        try {
+            // Сбрасываем все данные игры через GameData
+            gameData.resetGameData()
+
+            // Очищаем прогресс игры
+            val gameProgressPrefs = getSharedPreferences("game_progress", MODE_PRIVATE)
+            gameProgressPrefs.edit().clear().apply()
+
+            // Показываем уведомление
+            android.widget.Toast.makeText(this, "Прогресс игры полностью сброшен", android.widget.Toast.LENGTH_LONG).show()
+
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(this, "Ошибка при сбросе прогресса: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun exitApp() {

@@ -1,8 +1,11 @@
 package com.example.game
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
+import android.view.WindowManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
@@ -26,11 +29,27 @@ class GameplayActivity : ComponentActivity() {
     private lateinit var webView: WebView
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Скрываем системные кнопки Android
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        )
+        window.decorView.systemUiVisibility = (
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        or View.SYSTEM_UI_FLAG_FULLSCREEN
+                        or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                )
+
         super.onCreate(savedInstanceState)
         gameData = GameData(this)
         setContent {
             MaterialTheme {
-                GameplayScreen()
+                Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
+                    GameplayScreen()
+                }
             }
         }
     }
@@ -40,7 +59,6 @@ class GameplayActivity : ComponentActivity() {
         var playerStats by remember { mutableStateOf(gameData.getPlayerStats()) }
         var isLoading by remember { mutableStateOf(true) }
 
-        // Обновляем статистику каждые 500ms
         LaunchedEffect(Unit) {
             while (true) {
                 delay(500)
@@ -53,16 +71,21 @@ class GameplayActivity : ComponentActivity() {
                 .fillMaxSize()
                 .background(Color.Black)
         ) {
-            // Хедер с основными характеристиками
-            GameHeader(
-                hp = playerStats.hp,
-                cards = playerStats.cards,
-                isLoading = isLoading
-            )
+            // Хедер - для интерфейса игры
+            Box(
+                modifier = Modifier
+                    .height(160.dp)
+                    .fillMaxWidth()
+                    .background(Color.Black)
+            ) {
+                GameHeader(hp = playerStats.hp, cards = playerStats.cards, isLoading = isLoading)
+            }
 
             // WebView с игрой
             Box(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
             ) {
                 GameWebView(
                     onStatsChanged = {
@@ -74,7 +97,7 @@ class GameplayActivity : ComponentActivity() {
                 )
             }
 
-            // Футер с кнопками навигации
+            // Футер с кнопками
             GameFooter()
         }
     }
@@ -82,17 +105,16 @@ class GameplayActivity : ComponentActivity() {
     @Composable
     fun GameHeader(hp: Int, cards: Int, isLoading: Boolean) {
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             color = Color(0xFF2C2C2C)
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Здоровье
                 StatCard(
                     label = "Здоровье",
                     value = hp,
@@ -105,7 +127,6 @@ class GameplayActivity : ComponentActivity() {
                     isLoading = isLoading
                 )
 
-                // Карты (XP)
                 StatCard(
                     label = "Карты (XP)",
                     value = cards,
@@ -113,25 +134,6 @@ class GameplayActivity : ComponentActivity() {
                     color = Color(0xFF2196F3),
                     isLoading = isLoading
                 )
-
-                // Индикатор загрузки
-                if (isLoading) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(
-                                Color(0xFF4CAF50).copy(alpha = 0.1f),
-                                RoundedCornerShape(8.dp)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = Color(0xFF4CAF50),
-                            strokeWidth = 2.dp
-                        )
-                    }
-                }
             }
         }
     }
@@ -231,7 +233,6 @@ class GameplayActivity : ComponentActivity() {
                         "android"
                     )
 
-                    // ✅ Загружаем файл из res/raw/
                     loadUrl("file:///android_res/raw/index.html")
                 }
             },
@@ -241,59 +242,52 @@ class GameplayActivity : ComponentActivity() {
         )
     }
 
-
     @Composable
     fun GameFooter() {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = Color(0xFF2C2C2C)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp, horizontal = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
+            Button(
+                onClick = { navigateToCharacterSheet() },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF2196F3),
+                    contentColor = Color.White
+                )
             ) {
-                // Кнопка листа персонажа
-                Button(
-                    onClick = { navigateToCharacterSheet() },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF2196F3)
-                    )
-                ) {
-                    Text("Лист персонажа", fontSize = 12.sp)
-                }
+                Text("Лист персонажа", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            }
 
-                Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = {
+                    if (::webView.isInitialized) {
+                        webView.evaluateJavascript("if(window.gameInterface) window.gameInterface.pauseGame();", null)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF4CAF50),
+                    contentColor = Color.White
+                )
+            ) {
+                Text("Сохранить", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            }
 
-                // Кнопка сохранения
-                Button(
-                    onClick = {
-                        if (::webView.isInitialized) {
-                            webView.evaluateJavascript("if(window.gameInterface) window.gameInterface.pauseGame();", null)
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF4CAF50)
-                    )
-                ) {
-                    Text("Сохранить", fontSize = 12.sp)
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Кнопка выхода в меню
-                Button(
-                    onClick = { navigateToMain() },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF757575)
-                    )
-                ) {
-                    Text("Выход", fontSize = 12.sp)
-                }
+            Button(
+                onClick = { navigateToMain() },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF757575),
+                    contentColor = Color.White
+                )
+            ) {
+                Text("Выход", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -333,6 +327,11 @@ class GameplayActivity : ComponentActivity() {
         } else {
             navigateToMain()
         }
-        super.onBackPressed() // ✅ ВАЖНО: вызов super.onBackPressed()
+        super.onBackPressed()
+    }
+
+    // ✅ Новый метод для JS
+    fun navigateToMainFromJS() {
+        navigateToMain()
     }
 }
